@@ -43,7 +43,7 @@ test_data <- testing(run_split)
 
 # Fit Models --------------------------------------------------------------
 basePlot <- ggplot(train_data, aes(y = time_in_minutes, x = distance, col = elevation_gain)) +
-  geom_point() + facet_wrap(~gender)
+  geom_point(size = 0.5) + facet_wrap(~gender)
 
 
 cor(train_data[, c("age", "elevation_gain", "distance")])
@@ -66,7 +66,7 @@ predictedErrors <- predict(fit1, new_data = test_data) - test_data$time_in_secon
 sqrt(mean(predictedErrors^2))
 
 # Get Rid of Age
-fit2 <- lm(time_in_minutes ~ gender*elevation_gain*distance,
+fit2 <- lm(time_in_minutes ~ gender + elevation_gain:elevation_loss*distance,
            data = train_data)
 
 newData <- as.data.frame(expand_grid(elevation_gain = c(0, 5000, 1000),
@@ -77,14 +77,16 @@ newData <- as.data.frame(expand_grid(elevation_gain = c(0, 5000, 1000),
 
 newData$time_in_minutes <- predict(fit2, newdata = newData)
 
-basePlot + geom_line(data = newData, mapping = aes(grouping = group))
+basePlot + geom_line(data = newData, mapping = aes())
 
 summary(fit2)
-predictedErrors <- predict(fit2, newdata = test_data) - test_data$time_in_seconds
-sqrt(mean(predictedErrors^2)) # So this model stinks at predicting
+predictedErrors <- predict(fit2, newdata = test_data) - test_data$time_in_minutes
+sqrt(mean(predictedErrors^2))# So this model stinks at predicting
 
+plot(predict(fit2), residuals(fit2), pch = 18)
+plot(predict(fit1), residuals(fit1), pch = 18)
 # xgBoost -----------------------------------------------------------------
-
+# Because why not
 xtrain <- train_data[, c("age", #"gender", "nationality", 
                          "distance",
                          "elevation_gain", "aid_stations", 
