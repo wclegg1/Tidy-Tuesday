@@ -1,0 +1,80 @@
+---
+title: "Tidy Tuesday October 26,2021"
+author: "Wyatt Clegg"
+date: "11/3/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Introduction
+
+# Analysis
+## Define Libraries & Functions
+```{r}
+library(tidyverse)
+library(tidymodels)
+```
+## Read In & Clean Data
+```{r, eval = FALSE}
+ultra_rankings <- 
+  readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-10-26/ultra_rankings.csv') %>% 
+  mutate(nationality_Abb = if_else(nationality %in% c("USA", "FRA", "GBR", "JPN", "ESP", "CHN", "CAN"), nationality,
+                                   "Other"))
+race <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-10-26/race.csv')
+
+finalData <- ultra_rankings %>% 
+  drop_na(age, gender, time_in_seconds) %>% 
+  left_join(race, by = c("race_year_id")) %>% 
+  drop_na(elevation_gain, elevation_loss, distance) %>% 
+  mutate(time_in_minutes = time_in_seconds / 60,
+         time_in_hours = time_in_minutes / 60,
+         netElevation = elevation_gain - abs(elevation_loss),
+         elevationRatio = elevation_gain / 
+           elevation_loss) %>% 
+  group_by(nationality) %>% mutate(nationN = n()) %>%
+  ungroup %>% 
+  mutate(nationality_Abb = 
+           if_else(nationN > 1000, 
+                   nationality, "Other"))%>% 
+  filter(distance > 0)
+```
+
+## Exploratory Data Analysis
+```{r, echo = FALSE, eval = FALSE}
+racePlot <- ggplot(finalData,
+                   aes(x = date, y = distance, col = elevation_gain)) + 
+  geom_jitter() + 
+  labs(x = "Date", y = "Distance", title = "Races") + 
+  scale_color_continuous(type = "viridis") + 
+  theme_bw()
+
+race2Plot <- ggplot(finalData,
+                    aes(y = distance, 
+                        x = aid_stations, 
+                        col = elevation_gain)) + 
+  geom_jitter(size = 0.3) + 
+  labs(x = "", y = "Distance", title = "Races") + 
+  scale_color_continuous(type = "viridis") + 
+  theme_bw()
+
+nationalityPlot <- ggplot(finalData,
+                          aes(x = time_in_seconds / 
+                                (60 * 60),
+                              y = distance *
+                                elevation_gain,
+                              col = gender)) + 
+  geom_point(size = 0.3) + facet_wrap(~nationality_Abb) + 
+  theme_bw() + 
+  scale_color_brewer(palette = "Set1", name = "Gender") +
+  labs(x = "Time in Hours", y = "Distance x Elevation")
+
+run_split <- initial_split(finalData, prop = 0.95)
+train_data <- training(run_split)
+test_data <- testing(run_split)
+racePlot
+race2Plot
+# nationalityPlot
+```
+
