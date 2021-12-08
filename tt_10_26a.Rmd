@@ -85,16 +85,21 @@ train_data <- training(run_split)
 test_data <- testing(run_split)
 racePlot
 race2Plot
-# nationalityPlot
+nationalityPlot
 ```
 
 We can clearly see that most of these races are quite extreme. Furthermore, the elevation change in many of these races also varies a fair amount.
 
-Table 1 summarizes the change year by year. We can see that participation has increased vastly.
+Table 2 summarizes the change year by year. We can see that participation has increased vastly.
 
 ```{r, echo = FALSE}
-finalData %>% group_by(nationality_Abb) %>% tally %>% 
+nationTable <- finalData %>% 
+  distinct(runner, nationality_Abb) %>% 
+  group_by(nationality_Abb) %>% tally %>% 
   arrange(desc(n))
+
+knitr::kable(nationTable, 
+             caption = "Runners by Nationality")
 
 table1 <- finalData %>% 
   mutate(year = str_sub(date, 1, 4)) %>% 
@@ -129,7 +134,85 @@ colnames(table1) <- c("Year", "N", "# Runners", "# Races",
                       "# Race Cities", "# Race Countries",
                       "# Participants / Race", "# Aid Stations / Race",
                       "# Females", "# Males", "Age")
-knitr::kable(table1, caption = "Table 1: Summary Statistics")
+knitr::kable(table1, caption = "Summary Statistics")
+```
 
+```{r, echo = FALSE}
+corTable <- cor(train_data[, c("age", "elevation_gain", 
+                   "distance", "age", "aid_stations")]) 
+knitr::kable(corTable, caption = "Correlation Among Numeric Variables")
+
+# Collinearity may be a problem between elevation & distance
+colPlot <- ggplot(finalData, aes(x = distance, y = elevation_gain)) + 
+  geom_point() + theme_bw() + 
+  labs(x = "Distance", y = "Elevation Gain", 
+       title = "Collinearity Plot")
+colPlot
+```
+
+```{r}
+fit1 <- lm(time_in_minutes ~ aid_stations + #rank + 
+               age + 
+               gender + elevation_gain*distance ,
+             data = train_data)
+```
+
+```{r, echo = FALSE}
+basePlot <- ggplot(train_data, 
+                   aes(y = time_in_minutes / 60, x = distance, 
+                       col = elevation_gain)) +
+  geom_point(size = 0.5) + facet_wrap(~gender) + 
+  scale_color_continuous(type = "viridis")
+
+newData <- 
+  as.data.frame(expand_grid(elevation_gain = c(0, 5000, 10000),
+            distance = seq(0, 200, length.out = 100),
+            aid_stations = c(13),
+            gender = c("M", "W"),
+            age = mean(train_data$age))) %>% 
+  mutate(group = paste0("Sex: ", gender, " Age:", age, 
+                        "Net Elevation: ", elevation_gain,
+                        "Aid Stations: ", aid_stations))
+predObject <- predict(fit1, newdata = newData, se = TRUE)
+newData$time_in_minutes <- predObject$fit
+newData$upper <- predObject$fit + 2 * predObject$se.fit
+newData$low <- predObject$fit - 2 * predObject$se.fit
+
+
+fit1Plot <- basePlot + 
+  geom_ribbon(data = newData, 
+              aes(grouping = group, ymin = low / 60, 
+                  ymax = upper / 60,
+                  fill = elevation_gain),
+              alpha = 0.3) +
+  geom_line(data = newData %>% arrange(group, distance),
+            aes(grouping = group)) + 
+  geom_line(data = newData %>% arrange(group, distance),
+            aes(grouping = group, y = upper / 60), lty = 2,
+            col = "white") + 
+  geom_line(data = newData %>% arrange(group, distance),
+            aes(grouping = group, y = low / 60), lty = 2,
+            col  = "white") +
+  theme_bw() + 
+  labs(x = "Distance in km", y = "Time in Hours", 
+       title = "Best Fit for Ultra Runner Data")
+
+
+# summary(fit1)
+predictedErrors <- predict(fit1, new_data = test_data) - 
+  test_data$time_in_minutes
+RPMSE <- sqrt(mean(predictedErrors^2))
+
+train_data$yhat <- predict(fit1)
+train_data$resid <- residuals(fit1)
+train_data <- train_data %>% 
+  mutate(oddy = if_else(nationality %in% c("CHI", "ARG"),
+                        nationality, "Other"))
+pvrPlot <- ggplot(train_data, aes(x = yhat, y = resid)) + 
+  geom_hline(yintercept = 0, col = "red", lty = 2) +
+  geom_point() + facet_wrap(~nationality_Abb) + 
+  theme_bw()
+fit1Plot
+pvrPlot
 ```
 
